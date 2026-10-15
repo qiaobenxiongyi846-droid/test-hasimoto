@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>打ち合わせ 持ち物チェックリスト</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --text: #243044;
+      --muted: #718096;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
+    }
+    .container { max-width: 640px; margin: 0 auto; }
+    .header { margin-bottom: 22px; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 4vw, 2rem); letter-spacing: .02em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: .95rem; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: 0 8px 24px rgba(30, 41, 59, .04);
+    }
+    form { display: flex; gap: 10px; margin-bottom: 18px; }
+    input[type="text"] {
+      flex: 1; min-width: 0; padding: 12px 14px;
+      border: 1px solid #cbd5e1; border-radius: 10px;
+      font: inherit; outline: none; background: white;
+    }
+    input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+    button {
+      border: 0; border-radius: 10px; padding: 11px 15px;
+      font: inherit; font-weight: 600; cursor: pointer;
+      transition: background .15s ease, transform .05s ease;
+    }
+    button:active { transform: translateY(1px); }
+    .add-btn { background: var(--accent); color: white; white-space: nowrap; }
+    .add-btn:hover { background: var(--accent-hover); }
+    .toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; padding: 4px 0 14px; border-bottom: 1px solid var(--line);
+    }
+    .count { color: var(--muted); font-size: .9rem; }
+    .reset-btn { background: #eef2f7; color: #334155; }
+    .reset-btn:hover { background: #e2e8f0; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 2px; border-bottom: 1px solid #edf0f4;
+    }
+    li:last-child { border-bottom: 0; }
+    .check {
+      width: 19px; height: 19px; flex: 0 0 auto;
+      accent-color: var(--accent); cursor: pointer;
+    }
+    .item-label { flex: 1; overflow-wrap: anywhere; line-height: 1.45; }
+    li.done .item-label { color: #94a3b8; text-decoration: line-through; }
+    .delete-btn {
+      padding: 6px 9px; border-radius: 8px; color: var(--danger);
+      background: transparent; font-size: .88rem; font-weight: 500;
+    }
+    .delete-btn:hover { background: #fef2f2; }
+    .empty { padding: 28px 8px; color: var(--muted); text-align: center; }
+    .footer-note { margin: 14px 4px 0; color: var(--muted); font-size: .8rem; text-align: center; }
+    @media (max-width: 420px) {
+      body { padding: 22px 12px; }
+      .panel { padding: 16px; }
+      form { gap: 7px; }
+      .add-btn { padding-inline: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>打ち合わせ 持ち物チェック</h1>
+      <p class="subtitle">忘れ物がないか、出発前に確認しましょう。</p>
+    </header>
+
+    <section class="panel" aria-label="持ち物チェックリスト">
+      <form id="add-form">
+        <input id="item-input" type="text" placeholder="持ち物を入力（例：資料、名刺）" maxlength="100" aria-label="追加する持ち物" required>
+        <button class="add-btn" type="submit">＋ 追加</button>
+      </form>
+
+      <div class="toolbar">
+        <span class="count" id="count" aria-live="polite">0 / 0 件チェック済み</span>
+        <button class="reset-btn" id="reset-btn" type="button">リセット</button>
+      </div>
+
+      <ul id="checklist"></ul>
+      <div class="empty" id="empty-message" hidden>持ち物がありません。上から追加してください。</div>
+    </section>
+    <p class="footer-note">チェックした項目には取り消し線が付きます。</p>
+  </main>
+
+  <script>
+    const initialItems = [
+      "打ち合わせ資料",
+      "ノート・筆記用具",
+      "名刺",
+      "ノートパソコン",
+      "充電器・ケーブル",
+      "スマートフォン",
+      "必要書類・見積書"
+    ];
+
+    let items = initialItems.map((text, index) => ({
+      id: index + 1,
+      text,
+      checked: false
+    }));
+    let nextId = items.length + 1;
+
+    const list = document.getElementById("checklist");
+    const form = document.getElementById("add-form");
+    const input = document.getElementById("item-input");
+    const count = document.getElementById("count");
+    const emptyMessage = document.getElementById("empty-message");
+
+    function render() {
+      list.replaceChildren();
+      const checkedCount = items.filter(item => item.checked).length;
+      count.textContent = `${checkedCount} / ${items.length} 件チェック済み`;
+      emptyMessage.hidden = items.length !== 0;
+
+      items.forEach(item => {
+        const li = document.createElement("li");
+        if (item.checked) li.classList.add("done");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "check";
+        checkbox.checked = item.checked;
+        checkbox.setAttribute("aria-label", `${item.text}をチェック`);
+        checkbox.addEventListener("change", () => {
+          item.checked = checkbox.checked;
+          render();
+        });
+
+        const label = document.createElement("span");
+        label.className = "item-label";
+        label.textContent = item.text;
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-btn";
+        deleteButton.textContent = "削除";
+        deleteButton.setAttribute("aria-label", `${item.text}を削除`);
+        deleteButton.addEventListener("click", () => {
+          items = items.filter(current => current.id !== item.id);
+          render();
+        });
+
+        li.append(checkbox, label, deleteButton);
+        list.append(li);
+      });
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      items.push({ id: nextId++, text, checked: false });
+      input.value = "";
+      input.focus();
+      render();
+    });
+
+    document.getElementById("reset-btn").addEventListener("click", () => {
+      items = items.map(item => ({ ...item, checked: false }));
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
