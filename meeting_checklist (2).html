@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta id="meta-description" name="description" content="打ち合わせ 持ち物チェックリスト">
+  <title>打ち合わせ 持ち物チェック</title>
+  <style>
+    :root{--bg:#f5f7fa;--surface:#fff;--text:#243044;--muted:#718096;--line:#e2e8f0;--accent:#2563eb;--danger:#dc2626}
+    *{box-sizing:border-box}
+    body{margin:0;padding:28px 16px;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif}
+    .container{max-width:660px;margin:auto}
+    header{margin-bottom:20px}
+    h1{font-size:clamp(1.5rem,4vw,2rem);margin:0 0 8px;overflow-wrap:anywhere}
+    .subtitle{color:var(--muted);margin:0;line-height:1.6}
+    .title-editor{display:flex;gap:8px;margin-top:14px}
+    input[type=text]{min-width:0;flex:1;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font:inherit;background:#fff}
+    input[type=text]:focus{outline:2px solid #bfdbfe;border-color:var(--accent)}
+    button{border:0;border-radius:10px;padding:11px 14px;font:inherit;font-weight:600;cursor:pointer}
+    .title-button{background:#eaf0ff;color:#1d4ed8;white-space:nowrap}
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 8px 24px #1e293b0a}
+    .add-form{display:flex;gap:8px;margin-bottom:18px}
+    .add-button{background:var(--accent);color:white;white-space:nowrap}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0 14px;border-bottom:1px solid var(--line)}
+    .count{color:var(--muted);font-size:.9rem}
+    .reset{background:#eef2f7;color:#334155}
+    ul{list-style:none;padding:0;margin:0}
+    li{display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px solid #edf0f4}
+    li:last-child{border-bottom:0}
+    .check{width:19px;height:19px;flex:0 0 auto;accent-color:var(--accent)}
+    .item-label{flex:1;overflow-wrap:anywhere;line-height:1.5}
+    li.done .item-label{color:#94a3b8;text-decoration:line-through}
+    .delete{background:transparent;color:var(--danger);font-size:.88rem;padding:7px 9px}
+    .delete:hover{background:#fef2f2}
+    .empty{padding:25px 8px;text-align:center;color:var(--muted)}
+    .footnote{font-size:.82rem;color:var(--muted);margin:13px 4px 0;text-align:center}
+    @media(max-width:440px){body{padding:20px 12px}.panel{padding:15px}.title-editor,.add-form{gap:6px}.title-button,.add-button{padding-inline:10px}}
+  </style>
+</head>
+<body>
+<main class="container">
+  <header>
+    <h1 id="page-title">打ち合わせ 持ち物チェック</h1>
+    <p class="subtitle" id="subtitle">打ち合わせ 持ち物チェックの準備を確認しましょう。</p>
+    <form id="title-form" class="title-editor">
+      <input id="title-input" type="text" maxlength="80" placeholder="新しい題名を入力" aria-label="新しい題名" required>
+      <button class="title-button" type="submit">題名を変更</button>
+    </form>
+  </header>
+
+  <section class="panel" id="list-panel" aria-labelledby="list-heading">
+    <h2 id="list-heading" style="font-size:1rem;margin:0 0 14px">持ち物リスト</h2>
+    <form id="add-form" class="add-form">
+      <input id="item-input" type="text" maxlength="100" placeholder="持ち物を入力（例：資料、名刺）" aria-label="追加する持ち物" required>
+      <button class="add-button" type="submit">＋ 追加</button>
+    </form>
+    <div class="toolbar">
+      <span id="count" class="count" aria-live="polite">0 / 0 件チェック済み</span>
+      <button id="reset-button" class="reset" type="button">リセット</button>
+    </div>
+    <ul id="checklist"></ul>
+    <p id="empty-message" class="empty" hidden>持ち物がありません。上から追加してください。</p>
+  </section>
+  <p id="footnote" class="footnote">「チェック済み」にすると取り消し線が付きます。</p>
+</main>
+<script>
+(() => {
+  const DEFAULT_TITLE = "打ち合わせ 持ち物チェック";
+  const $ = id => document.getElementById(id);
+  const titleInput = $("title-input");
+
+  // 題名を参照しているすべての表示箇所を、この関数でまとめて更新します。
+  function updateTitle(value, save = true) {
+    const title = (value || "").trim() || DEFAULT_TITLE;
+    $("page-title").textContent = title;
+    document.title = title; // ブラウザのタブ
+    $("subtitle").textContent = `${title}の準備を確認しましょう。`;
+    $("list-panel").setAttribute("aria-label", `${title}のリスト`);
+    $("list-heading").textContent = `${title}：持ち物リスト`;
+    $("meta-description").setAttribute("content", `${title}。項目を追加・削除し、チェック状況を確認できます。`);
+    $("footnote").textContent = `${title}：チェックした項目には取り消し線が付きます。`;
+    titleInput.value = title;
+    if (save) {
+      try { localStorage.setItem("checklistPageTitle", title); } catch (error) {}
+    }
+  }
+
+  let savedTitle = "";
+  try { savedTitle = localStorage.getItem("checklistPageTitle") || ""; } catch (error) {}
+  updateTitle(savedTitle || DEFAULT_TITLE, false);
+
+  $("title-form").addEventListener("submit", event => {
+    event.preventDefault();
+    updateTitle(titleInput.value);
+  });
+
+  const startingItems = [
+    "打ち合わせ資料", "ノート・筆記用具", "名刺", "ノートパソコン",
+    "充電器・ケーブル", "スマートフォン", "必要書類・見積書"
+  ];
+  let items = startingItems.map((text, index) => ({id:index + 1, text, checked:false}));
+  let nextId = items.length + 1;
+
+  function render() {
+    const list = $("checklist");
+    list.replaceChildren();
+    const checked = items.filter(item => item.checked).length;
+    $("count").textContent = `${checked} / ${items.length} 件チェック済み`;
+    $("empty-message").hidden = items.length !== 0;
+
+    items.forEach(item => {
+      const li = document.createElement("li");
+      if (item.checked) li.classList.add("done");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "check";
+      checkbox.checked = item.checked;
+      checkbox.setAttribute("aria-label", `${item.text}をチェック`);
+      checkbox.addEventListener("change", () => { item.checked = checkbox.checked; render(); });
+
+      const label = document.createElement("span");
+      label.className = "item-label";
+      label.textContent = item.text;
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete";
+      remove.textContent = "削除";
+      remove.setAttribute("aria-label", `${item.text}を削除`);
+      remove.addEventListener("click", () => {
+        items = items.filter(entry => entry.id !== item.id);
+        render();
+      });
+      li.append(checkbox, label, remove);
+      list.append(li);
+    });
+  }
+
+  $("add-form").addEventListener("submit", event => {
+    event.preventDefault();
+    const value = $("item-input").value.trim();
+    if (!value) return;
+    items.push({id:nextId++, text:value, checked:false});
+    $("item-input").value = "";
+    render();
+    $("item-input").focus();
+  });
+
+  $("reset-button").addEventListener("click", () => {
+    items = items.map(item => ({...item, checked:false}));
+    render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>
